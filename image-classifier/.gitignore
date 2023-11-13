@@ -1,3 +1,11 @@
+# Flowers folder
+flowers/
+*.tar.gz
+
+# Checkpoints folder
+checkpoints/
+*.pth
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

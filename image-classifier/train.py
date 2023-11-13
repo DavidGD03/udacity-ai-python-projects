@@ -25,7 +25,7 @@ def main():
     optimizer = train_model(model, train_loader, valid_loader, args.learning_rate, args.epochs, args.gpu)
 
     # Save the checkpoint
-    save_checkpoint(model, train_data, optimizer, args.save_dir)
+    save_checkpoint(model, train_data, optimizer, args.arch, args.save_dir)
 
 if __name__ == '__main__':
     main()

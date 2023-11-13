@@ -5,6 +5,7 @@ from torch import optim
 from collections import OrderedDict
 from PIL import Image
 import numpy as np
+import os
 
 def build_model(arch='vgg11', hidden_units=512):
     '''
@@ -17,20 +18,31 @@ def build_model(arch='vgg11', hidden_units=512):
     Returns:
     torch.nn.Module: The configured model.
     '''
-    model = getattr(models, arch)(pretrained=True)
-
+    if arch == 'vgg11':
+        model = models.vgg11(pretrained=True)
+        num_inputs = 25088
+    elif arch == 'alexnet':
+        model = models.alexnet(pretrained=True)
+        num_inputs = 9216
+    else:
+        raise ValueError("Unsupported architecture. Please choose from 'vgg11', or 'alexnet'.")
+    print(num_inputs)
     # Freeze parameters
     for param in model.parameters():
         param.requires_grad = False
 
     # Modify the classifier
     model.classifier = nn.Sequential(
-        nn.Linear(25088, hidden_units),
+        nn.Linear(num_inputs, hidden_units),
         nn.ReLU(),
         nn.Dropout(0.2),
         nn.Linear(hidden_units, 102),
         nn.LogSoftmax(dim=1)
     )
+
+    # Unfreeze modified classifier parameters
+    for param in model.classifier.parameters():
+        param.requires_grad = True
 
     return model
 
@@ -50,12 +62,12 @@ def train_model(model, train_loader, valid_loader, learning_rate=0.003, epochs=1
     torch.optim.Optimizer: The trained optimizer.
     '''
     optimizer = optim.Adam(model.classifier.parameters(), lr=learning_rate)
-    device = torch.device("cuda" if use_gpu else "cpu")
+    device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
     steps = 0
     running_loss = 0
     print_every = 5
     criterion = nn.NLLLoss()
-    model.to(device);
+    model.to(device)
     for epoch in range(epochs):
         for inputs, labels in train_loader:
             steps += 1
@@ -97,7 +109,7 @@ def train_model(model, train_loader, valid_loader, learning_rate=0.003, epochs=1
                 model.train()
     return optimizer
 
-def save_checkpoint(model, train_data, optimizer, save_dir='checkpoints/'):
+def save_checkpoint(model, train_data, optimizer, arch = 'vgg11', save_dir='checkpoints/'):
     '''
     Save a checkpoint of the trained model.
 
@@ -110,16 +122,21 @@ def save_checkpoint(model, train_data, optimizer, save_dir='checkpoints/'):
     # Attach class_to_idx to the model
     model.class_to_idx = train_data.class_to_idx
 
+    if arch == 'vgg11':
+        num_inputs = 25088
+    elif arch == 'alexnet':
+        num_inputs = 9216
+
     # Define additional information to save in the checkpoint
     checkpoint = {
-        'input_size': 25088,  
+        'input_size': num_inputs,  
         'output_size': 102,  
         'hidden_layers': [each.out_features for each in model.classifier if hasattr(each, 'out_features')],
         'state_dict': model.state_dict(),
         'class_to_idx': model.class_to_idx,
         'optimizer_state_dict': optimizer.state_dict()
     }
-
+    os.mkdir(save_dir)
     # Save the checkpoint to a file
     torch.save(checkpoint, save_dir + 'checkpoint.pth')
 
@@ -139,18 +156,26 @@ def load_checkpoint(filepath, model_arch='vgg11'):
     # Support two models
     if model_arch == 'vgg11':
         model = models.vgg11(pretrained=True)
-    elif model_arch == 'resnet18':
-        model = models.resnet18(pretrained=True)
+    elif model_arch == 'alexnet':
+        model = models.alexnet(pretrained=True)
     else:
-        raise ValueError(f"Unsupported model architecture: {model_arch}")
+        raise ValueError("Unsupported architecture. Please choose from 'vgg11', or 'alexnet'.")
+    
     
     for param in model.parameters():
             param.requires_grad = False
+
+    # Get the sizes of the layers in the checkpoint
+    input_size = checkpoint['input_size']
+    hidden_size = checkpoint['hidden_layers'][0]
+    output_size = checkpoint['output_size']
+
+    # Modify the classifier dynamically
     classifier = nn.Sequential(OrderedDict([
-        ('0', nn.Linear(checkpoint['input_size'], checkpoint['hidden_layers'][0])),
+        ('0', nn.Linear(input_size, hidden_size)),
         ('1', nn.ReLU()),
         ('2', nn.Dropout(0.2)),
-        ('3', nn.Linear(checkpoint['hidden_layers'][0], checkpoint['output_size'])),
+        ('3', nn.Linear(hidden_size, output_size)),
         ('4', nn.LogSoftmax(dim=1))
     ]))
 
@@ -158,6 +183,10 @@ def load_checkpoint(filepath, model_arch='vgg11'):
     
     #Load the state dict
     state_dict=checkpoint['state_dict']
+
+    # Filter out unnecessary keys
+    #state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
+
     model.load_state_dict(state_dict)
 
     # Attach class_to_idx to the model
@@ -229,7 +258,7 @@ def predict(image_path, model, topk=5, use_gpu=False):
     image_tensor = image_tensor.unsqueeze(0)
     
     # Move the input tensor to the GPU, if available
-    device = torch.device("cuda" if use_gpu else "cpu")
+    device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
     image_tensor = image_tensor.to(device)
     
     # Move the model to the same device as the input tensor
