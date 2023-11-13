@@ -7,6 +7,16 @@ from PIL import Image
 import numpy as np
 
 def build_model(arch='vgg11', hidden_units=512):
+    '''
+    Build and configure a pre-trained model with a modified classifier.
+
+    Args:
+    arch (str, optional): The architecture of the pre-trained model. Defaults to 'vgg11'.
+    hidden_units (int, optional): Number of units in the hidden layer of the modified classifier. Defaults to 512.
+
+    Returns:
+    torch.nn.Module: The configured model.
+    '''
     model = getattr(models, arch)(pretrained=True)
 
     # Freeze parameters
@@ -25,6 +35,20 @@ def build_model(arch='vgg11', hidden_units=512):
     return model
 
 def train_model(model, train_loader, valid_loader, learning_rate=0.003, epochs=1, use_gpu=False):
+    '''
+    Train a deep learning model using the specified data loaders.
+
+    Args:
+    model (torch.nn.Module): The deep learning model to be trained.
+    train_loader (torch.utils.data.DataLoader): Data loader for the training set.
+    valid_loader (torch.utils.data.DataLoader): Data loader for the validation set.
+    learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.003.
+    epochs (int, optional): Number of training epochs. Defaults to 1.
+    use_gpu (bool, optional): Whether to use GPU for training. Defaults to False.
+
+    Returns:
+    torch.optim.Optimizer: The trained optimizer.
+    '''
     optimizer = optim.Adam(model.classifier.parameters(), lr=learning_rate)
     device = torch.device("cuda" if use_gpu else "cpu")
     steps = 0
@@ -74,6 +98,15 @@ def train_model(model, train_loader, valid_loader, learning_rate=0.003, epochs=1
     return optimizer
 
 def save_checkpoint(model, train_data, optimizer, save_dir='checkpoints/'):
+    '''
+    Save a checkpoint of the trained model.
+
+    Args:
+    model (torch.nn.Module): The trained model.
+    train_data (torchvision.datasets.folder.ImageFolder): The training data used for the model.
+    optimizer (torch.optim.Optimizer): The trained optimizer.
+    save_dir (str, optional): Directory to save the checkpoint file. Defaults to 'checkpoints/'.
+    '''
     # Attach class_to_idx to the model
     model.class_to_idx = train_data.class_to_idx
 
@@ -90,11 +123,27 @@ def save_checkpoint(model, train_data, optimizer, save_dir='checkpoints/'):
     # Save the checkpoint to a file
     torch.save(checkpoint, save_dir + 'checkpoint.pth')
 
-def load_checkpoint(filepath):
+def load_checkpoint(filepath, model_arch='vgg11'):
+    '''
+    Load a pre-trained model checkpoint from the specified file.
+
+    Args:
+    filepath (str): Path to the checkpoint file.
+    model_arch (str, optional): The architecture of the model to be loaded. Defaults to 'vgg11'.
+
+    Returns:
+    torch.nn.Module: The loaded model.
+    '''
     checkpoint = torch.load(filepath)
 
-    # Load a pre-trained model of the same architecture used during training
-    model = models.vgg11(pretrained=True)  
+    # Support two models
+    if model_arch == 'vgg11':
+        model = models.vgg11(pretrained=True)
+    elif model_arch == 'resnet18':
+        model = models.resnet18(pretrained=True)
+    else:
+        raise ValueError(f"Unsupported model architecture: {model_arch}")
+    
     for param in model.parameters():
             param.requires_grad = False
     classifier = nn.Sequential(OrderedDict([

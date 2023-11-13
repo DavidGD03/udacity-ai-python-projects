@@ -1,6 +1,5 @@
 import argparse
 from model_utils import load_checkpoint, predict
-from data_utils import process_image
 import json
 
 def main():
@@ -11,11 +10,12 @@ def main():
     parser.add_argument('--top_k', type=int, default=5, help='Return top K most likely classes')
     parser.add_argument('--category_names', type=str, default='cat_to_name.json', help='Mapping of categories to real names')
     parser.add_argument('--gpu', action='store_true', help='Use GPU for inference')
+    parser.add_argument('--arch', type=str, default='vgg11', help='Model architecture')
 
     args = parser.parse_args()
 
     # Load the checkpoint
-    model = load_checkpoint(args.checkpoint)
+    model = load_checkpoint(args.checkpoint, args.arch)
 
     # Make prediction
     probs, classes = predict(args.input, model, args.top_k, args.gpu)
